@@ -3,7 +3,7 @@
 
 // STB_IMAGE for loading images of many filetypes
 #include <stb_image.h>
-
+#include<iostream>
 #include <cstdlib>
 
 #include <labhelper.h>
@@ -44,8 +44,9 @@ GLuint shaderProgram;
 // The vertexArrayObject here will hold the pointers to
 // the vertex data (in positionBuffer) and color data per vertex (in colorBuffer)
 GLuint positionBuffer, colorBuffer, indexBuffer, texcoordBuffer, vertexArrayObject;
-GLuint texture, texture_exp;
-GLuint positionBuffer_exp, indexBuffer_exp, texcoordBuffer_exp, vertexArrayObject_exp;
+GLuint texture;
+GLuint vertBuffer_exp, indexBuffer_exp, texcoordBuffer_exp, vertexArrayObject_exp;
+GLuint texture_exp;
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -105,39 +106,50 @@ void initialize()
 	///////////////////////////////////////////////////////////////////////////
 	// Create the element array buffer object
 	///////////////////////////////////////////////////////////////////////////
+	//const int indices[] = {
+	//	0, 1, 3, // Triangle 1
+	//	1, 2, 3  // Triangle 2
+	//};
 	const int indices[] = {
-		0, 1, 3, // Triangle 1
-		1, 2, 3  // Triangle 2
+	3,1,0,
+	3,2,1
 	};
 	glGenBuffers(1, &indexBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, labhelper::array_length(indices) * sizeof(float), indices,
 		GL_STATIC_DRAW);
 
+	// Create the explosion quad
+///////////////////////////////////////////////////////////////////////////
 	const float positions_exp[] = {
-		// X      Y       Z
-		10.0f, 0.0f, 0.0f,  // v0
-		10.0f, 20.0f,0.0f, // v1
-		30.0f, 0.0f, 0.0f, // v2
-		30.0f, 20.0f, 0.0f   // v3
+		2.0f,  0.0f,  -50.0f, // v0
+		2.0f,  10.0f, -50.0f, // v1
+		12.0f, 10.0f, -50.0f, // v2
+		12.0f, 0.0f,  -50.0f  // v3
 	};
-	//Load Texture
 	float texcoords_exp[] = {
-		0.0f,0.0f,//(u,v) for v0
-		1.0f,0.0f,//(u,v) for v1
-		0.0f,1.0f,//(u.v) for v2
-		1.0f,1.0f//(u.v) for v3
+		0.0f, 0.0f, // (u,v) for v0
+		0.0f, 1.0f, // (u,v) for v1
+		1.0f, 1.0f, // (u,v) for v2
+		1.0f, 0.0f  // (u,v) for v3
 	};
+	//const int indices_exp[] = {
+	//	0, 1, 3, // Triangle 1
+	//	1, 2, 3  // Triangle 2
+	//};
+	//invert the render order
 	const int indices_exp[] = {
-		0, 1, 3, // Triangle 1
-		1, 2, 3  // Triangle 2
+		3,1,0,
+		3,2,1
 	};
-	// Create a handle for the vertex position buffer
-	glGenBuffers(1, &positionBuffer_exp);
-	// Set the newly created buffer as the current one
-	glBindBuffer(GL_ARRAY_BUFFER, positionBuffer_exp);
-	// Send the vetex position data to the current buffer
-	glBufferData(GL_ARRAY_BUFFER, labhelper::array_length(positions_exp) * sizeof(float), positions_exp,
+	// Create the buffer objects
+	glGenBuffers(1, &vertBuffer_exp);
+	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer_exp);
+	glBufferData(GL_ARRAY_BUFFER, labhelper::array_length(positions_exp) * sizeof(float), positions_exp, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &texcoordBuffer_exp);
+	glBindBuffer(GL_ARRAY_BUFFER, texcoordBuffer_exp);
+	glBufferData(GL_ARRAY_BUFFER, labhelper::array_length(texcoords_exp) * sizeof(float), texcoords_exp,
 		GL_STATIC_DRAW);
 
 	glGenBuffers(1, &indexBuffer_exp);
@@ -145,21 +157,16 @@ void initialize()
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, labhelper::array_length(indices_exp) * sizeof(float), indices_exp,
 		GL_STATIC_DRAW);
 
-	glGenBuffers(1, &texcoordBuffer_exp);//Create a handle for the texcoord buffer
-	glBindBuffer(GL_ARRAY_BUFFER, texcoordBuffer_exp);//Set the newly created buffer as the current one
-	//Send the texcoord data to the current buffer
-	glBufferData(GL_ARRAY_BUFFER, labhelper::array_length(texcoords_exp) * sizeof(float), texcoords_exp, GL_STATIC_DRAW);
-	
 	glGenVertexArrays(1, &vertexArrayObject_exp);
 	glBindVertexArray(vertexArrayObject_exp);
-
-	glBindBuffer(GL_ARRAY_BUFFER, positionBuffer_exp);
+	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer_exp);
 	glVertexAttribPointer(0, 3, GL_FLOAT, false /*normalized*/, 0 /*stride*/, 0 /*offset*/);
-	glBindBuffer(GL_ARRAY_BUFFER,texcoordBuffer_exp);
-	glVertexAttribPointer(2, 2, GL_FLOAT, false, 0, 0);
+	glBindBuffer(GL_ARRAY_BUFFER, texcoordBuffer_exp);
+	glVertexAttribPointer(1, 2, GL_FLOAT, false /*normalized*/, 0 /*stride*/, 0 /*offset*/);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer_exp);
 	glEnableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
+	glEnableVertexAttribArray(1);
+	glDisableVertexAttribArray(2);
 	// The loadShaderProgram and linkShaderProgam functions are defined in glutil.cpp and
 	// do exactly what we did in lab1 but are hidden for convenience
 	shaderProgram = labhelper::loadShaderProgram("../lab2-textures/simple.vert",
@@ -190,29 +197,29 @@ void initialize()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16.0f);
-	glBindTexture(GL_TEXTURE_2D, 0);//Unbnd the texture,avoid being modified
+	glBindTexture(GL_TEXTURE_2D, 0);//Unbind the texture,avoid being modified
 	stbi_image_free(image);
 	//Task 7:
-	
+
 	//Bind and Render Texture
 
-	unsigned char* image_exp = stbi_load("../scenes/textures/explosion.png", &w, &h, &comp, STBI_rgb_alpha);
-	//Generate OpenGL texture
+
+	unsigned char* image2 = stbi_load("../scenes/textures/explosion.png", &w, &h, &comp, STBI_rgb_alpha);
 	glGenTextures(1, &texture_exp);
-	//Bind this texture and allocate storage
 	glBindTexture(GL_TEXTURE_2D, texture_exp);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_exp);
-	//clamp the texure coordinate to this range
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image2);
+	stbi_image_free(image2);
+	//Indicates that the active texture should be repeated,
+	//instead of for instance clamped, for texture coordinates > 1 or <-1.
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	//set up texture filtering
-	glGenerateMipmap(GL_TEXTURE_2D);
+	//glGenerateMipmap(GL_TEXTURE_2D);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 16);
+	// Sets the type of mipmap interpolation to be used on magnifying and
+	// minifying the active texture. These are the nicest available options.
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
-	glBindTexture(GL_TEXTURE_2D, 0);//Unbnd the texture,avoid being modified
-	stbi_image_free(image_exp);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 
@@ -235,7 +242,8 @@ void display(void)
 
 	// We disable backface culling for this tutorial, otherwise care must be taken with the winding order
 	// of the vertices. It is however a lot faster to enable culling when drawing large scenes.
-	glDisable(GL_CULL_FACE); //glEnable(GL_CULL_FACE);
+	//glDisable(GL_CULL_FACE); //
+	glEnable(GL_CULL_FACE);
 	// Disable depth testing
 	glDisable(GL_DEPTH_TEST);
 
@@ -255,6 +263,7 @@ void display(void)
 	loc = glGetUniformLocation(shaderProgram, "cameraPosition");
 	glUniform3f(loc, camera_pan, 10, 0);
 
+
 	// Task 3.1
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
@@ -265,10 +274,11 @@ void display(void)
 	//set alpha channel
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture_exp);
 	glBindVertexArray(vertexArrayObject_exp);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-	if(glIsEnabled(GL_BLEND))glDisable(GL_BLEND);
+	glDisable(GL_BLEND);
 
 	glUseProgram(0); // "unsets" the current shader program. Not really necessary.
 }
