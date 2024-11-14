@@ -50,6 +50,7 @@ Model* cityModel = nullptr;
 Model* carModel = nullptr;
 Model* groundModel = nullptr;
 mat4 carModelMatrix(1.0f);
+mat4 carModelMatrix2(1.0f);
 
 vec3 worldUp = vec3(0.0f, 1.0f, 0.0f);
 
@@ -146,8 +147,15 @@ void display()
 	                               0.000000000f, 0.816496551f, 1.00000000f, 0.000000000f,   //
 	                               -0.707106769f, -0.408248276f, 1.00000000f, 0.000000000f, //
 	                               0.000000000f, 0.000000000f, -30.0000000f, 1.00000000f);  //
-	mat4 viewMatrix = constantViewMatrix;
-
+	//mat4 viewMatrix = constantViewMatrix;
+	//use camera direction as -z axis and compute the x (cameraRight) and y (cameraUp)
+	vec3 cameraRight = normalize(cross(cameraDirection, worldUp));
+	vec3 cameraUp = normalize(cross(cameraRight, cameraDirection));
+	
+	mat3 cameraBaseVectorsWorldSpace(cameraRight, cameraUp, -cameraDirection);
+	//take the inverse of the matrix
+	mat4 cameraRotation=mat4(transpose(cameraBaseVectorsWorldSpace));
+	mat4 viewMatrix = cameraRotation * translate(-cameraPosition);
 	// Setup the projection matrix
 	if(w != old_w || h != old_h)
 	{
@@ -172,7 +180,7 @@ void display()
 
 	// Ground
 	// Task 5: Uncomment this
-	//drawGround(modelViewProjectionMatrix);
+	drawGround(modelViewProjectionMatrix);
 
 	// car
 	modelViewProjectionMatrix = projectionMatrix * viewMatrix * carModelMatrix;
@@ -180,7 +188,15 @@ void display()
 	glUniformMatrix4fv(mloc, 1, false, &carModelMatrix[0].x);
 	render(carModel);
 
-
+	mat4 r = glm::rotate(float(currentTime*M_PI*-0.5f),glm::vec3(0, 1, 0));
+	mat4 t = glm::translate(vec3(25,0, 0));
+	mat4 t2 = glm::translate(vec3(1, -0.5, 1));
+	carModelMatrix2 =r * t * t2;
+	//carModelMatrix2 = t * t2 * r;
+	modelViewProjectionMatrix = projectionMatrix * viewMatrix * carModelMatrix2;
+	glUniformMatrix4fv(mvploc, 1, false, &modelViewProjectionMatrix[0].x);
+	glUniformMatrix4fv(mloc, 1, false, &carModelMatrix2[0].x);
+	render(carModel);
 	glUseProgram(0);
 }
 
@@ -233,9 +249,13 @@ bool handleEvents(void)
 			// More info at https://wiki.libsdl.org/SDL_MouseMotionEvent
 			int delta_x = event.motion.x - g_prevMouseCoords.x;
 			int delta_y = event.motion.y - g_prevMouseCoords.y;
-			if(event.button.button == SDL_BUTTON_LEFT)
+			if (event.button.button&&SDL_BUTTON(SDL_BUTTON_LEFT))
 			{
-				printf("Mouse motion while left button down (%i, %i)\n", event.motion.x, event.motion.y);
+				//printf("Mouse motion while left button down (%i, %i)\n", event.motion.x, event.motion.y);
+				float rotationSpeed = 0.005f;
+				mat4 yaw = rotate(rotationSpeed * -delta_x, worldUp);
+				mat4 pitch = rotate(rotationSpeed * -delta_y, normalize(cross(cameraDirection, worldUp)));
+				cameraDirection = vec3(pitch * yaw * vec4(cameraDirection, 0.0f));
 			}
 			g_prevMouseCoords.x = event.motion.x;
 			g_prevMouseCoords.y = event.motion.y;
@@ -246,21 +266,68 @@ bool handleEvents(void)
 	const uint8_t* state = SDL_GetKeyboardState(nullptr);
 
 	// implement camera controls based on key states
-	if(state[SDL_SCANCODE_UP])
+	//if(state[SDL_SCANCODE_UP])
+	//{
+	//	printf("Key Up is pressed down\n");
+	//}
+	//if(state[SDL_SCANCODE_DOWN])
+	//{
+	//	printf("Key Down is pressed down\n");
+	//}
+	//if(state[SDL_SCANCODE_LEFT])
+	//{
+	//	printf("Key Left is pressed down\n");
+	//}
+	//if(state[SDL_SCANCODE_RIGHT])
+	//{
+	//	printf("Key Right is pressed down\n");
+	//}
+	const float speed = 10.f;
+	const float rotateSpeed = 2.f;
+	vec3 car_forward = vec3(0, 0, 1);
+	if (state[SDL_SCANCODE_UP])
 	{
-		printf("Key Up is pressed down\n");
+		T = translate(car_forward * speed * deltaTime) * T;
 	}
-	if(state[SDL_SCANCODE_DOWN])
+	if (state[SDL_SCANCODE_DOWN])
 	{
-		printf("Key Down is pressed down\n");
+		T = translate(-car_forward * speed * deltaTime) * T;
 	}
-	if(state[SDL_SCANCODE_LEFT])
+	if (state[SDL_SCANCODE_LEFT])
 	{
-		printf("Key Left is pressed down\n");
+		//T = translate(vec3(1, 0, 0) * speed * deltaTime) * T;
+		R = glm::rotate(rotateSpeed * deltaTime, glm::vec3(0, 1, 0)) * R;
 	}
-	if(state[SDL_SCANCODE_RIGHT])
+	if (state[SDL_SCANCODE_RIGHT])
 	{
-		printf("Key Right is pressed down\n");
+		R = glm::rotate(-rotateSpeed * deltaTime, glm::vec3(0, 1, 0)) * R;
+	}
+	//carModelMatrix = R; only rotating around the orign
+	carModelMatrix = T*R;
+	//WASD keys control camera
+	const float cameraSpeed = 5.0f * deltaTime;
+	 // Move forward (W)
+	if (state[SDL_SCANCODE_W])
+	{
+		cameraPosition += cameraSpeed * cameraDirection;
+	}
+
+	// Move backward (S)
+	if (state[SDL_SCANCODE_S])
+	{
+		cameraPosition -= cameraSpeed * cameraDirection;
+	}
+
+	// Move left (A)
+	if (state[SDL_SCANCODE_A])
+	{
+		cameraPosition -= normalize(cross(cameraDirection, worldUp)) * cameraSpeed;
+	}
+
+	// Move right (D)
+	if (state[SDL_SCANCODE_D])
+	{
+		cameraPosition += normalize(cross(cameraDirection, worldUp)) * cameraSpeed;
 	}
 
 	return quitEvent;
