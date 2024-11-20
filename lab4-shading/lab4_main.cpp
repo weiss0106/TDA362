@@ -40,6 +40,7 @@ GLuint simpleShaderProgram;
 // Environment
 ///////////////////////////////////////////////////////////////////////////////
 GLuint fullScreenQuadVAO = 0;
+GLuint positionBuffer;
 float environment_multiplier = 1.0f;
 GLuint environmentMap;
 GLuint irradianceMap;
@@ -168,6 +169,22 @@ void initFullScreenQuad()
 	{
 		// Task 4.1
 		// ...
+		static const glm::vec2 positions[] = {{ -1.0f, -1.0f }, { 1.0f, -1.0f }, { 1.0f, 1.0f },
+			{ -1.0f, -1.0f }, { 1.0f, 1.0f },  { -1.0f, 1.0f }
+		};
+		//Create and Bind Buffer
+		glGenBuffers(1, &positionBuffer);
+		glBindBuffer(GL_ARRAY_BUFFER, positionBuffer);
+		glBufferData(GL_ARRAY_BUFFER, labhelper::array_length(positions)*sizeof(glm::vec2), positions, GL_STATIC_DRAW);
+		//Create and Bind VAO
+		glGenVertexArrays(1, &fullScreenQuadVAO);
+		glBindVertexArray(fullScreenQuadVAO);
+		//Bind Buffer and data
+		glBindBuffer(GL_ARRAY_BUFFER, positionBuffer);
+		//Set VertexAttribute Pointer 
+		glVertexAttribPointer(0, 2, GL_FLOAT, false,0, 0);
+		glEnableVertexAttribArray(0);
+
 	}
 }
 
@@ -181,6 +198,14 @@ void drawFullScreenQuad()
 	///////////////////////////////////////////////////////////////////////////
 	// Task 4.2
 	// ...
+	GLboolean previous_depth_state;
+	glGetBooleanv(GL_DEPTH_TEST, &previous_depth_state);
+	glDisable(GL_DEPTH_TEST);
+	glBindVertexArray(fullScreenQuadVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	if (previous_depth_state) {
+		glEnable(GL_DEPTH_TEST);
+	}
 }
 
 
@@ -277,8 +302,8 @@ void initialize()
 	loadScenes();
 
 	// You can find the valid values for this in `loadScenes`: "Ship", "Material Test" and "Cube"
-	changeScene("Ship");
-	//changeScene("Material Test");
+	//changeScene("Ship");
+	changeScene("Material Test");
 	//changeScene("Cube");
 }
 
@@ -339,7 +364,11 @@ void display(void)
 	// Task 4.3 - Render a fullscreen quad, to generate the background from the
 	//            environment map.
 	///////////////////////////////////////////////////////////////////////////
-
+	glUseProgram(backgroundProgram);
+	labhelper::setUniformSlow(backgroundProgram, "environment_multiplier", environment_multiplier);
+	labhelper::setUniformSlow(backgroundProgram, "inv_PV", inverse(projectionMatrix * viewMatrix));
+	labhelper::setUniformSlow(backgroundProgram, "camera_pos", camera.position);
+	drawFullScreenQuad();
 	///////////////////////////////////////////////////////////////////////////
 	// Render the .obj models
 	///////////////////////////////////////////////////////////////////////////
