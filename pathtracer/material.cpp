@@ -38,61 +38,126 @@ WiSample Diffuse::sample_wi(const vec3& wo, const vec3& n) const
 
 vec3 MicrofacetBRDF::f(const vec3& wi, const vec3& wo, const vec3& n) const
 {
-	return vec3(0.0f);
+	vec3 wh = normalize(wi + wo);
+	float wodotwh = max(dot(wo, wh), 0.001f);//ensure not division 0
+	//Calculate the microfacet distribution function
+	float ndotwh = max(dot(n, wh), 0.001f);
+	float ndotwi = max(dot(n, wi), 0.001f);	
+	float ndotwo = max(dot(n, wo), 0.001f);
+	float D = ((shininess + 2.0f) / (2.0f * M_PI)) * pow(ndotwh, shininess);
+	//Calculate the shadowing function
+
+	float G = min(1.0f, min(2.0f * ndotwh * ndotwo / wodotwh, 2.0f * ndotwh * ndotwi / wodotwh));
+	//Calculate brdf
+	float denominator = 4.0 * clamp(ndotwo * ndotwi, 0.001f, 1.0f);
+	float brdf = D * G / denominator;
+	return brdf*vec3(1.0,1.0,1.0);
 }
 
 WiSample MicrofacetBRDF::sample_wi(const vec3& wo, const vec3& n) const
 {
-	WiSample r = sampleHemisphereCosine(wo, n);
-	r.f = f(r.wi, wo, n);
+	//WiSample r = sampleHemisphereCosine(wo, n);
+	//r.f = f(r.wi, wo, n);
+	WiSample r;
+	vec3 tangent = normalize(perpendicular(n));
+	vec3 bitangent = normalize(cross(tangent, n));
+	float phi = 2.0f * M_PI * randf();
+	float cos_theta = pow(randf(), 1.0f / (shininess + 1));
+	float sin_theta = sqrt(max(0.0f, 1.0f - cos_theta * cos_theta));
+	vec3 wh = normalize(sin_theta * cos(phi) * tangent + sin_theta * sin(phi) * bitangent + cos_theta * n);
 
+	float ndotwh = abs(dot(n, wh));
+	float wodotwh = abs(dot(wo, wh));
+	float pwh = (shininess + 1.0f) * pow(ndotwh, shininess) / (2 * M_PI);
+	float pwi = pwh / (4 * wodotwh);
+	r.pdf = pwi;
+	r.wi = normalize(2 * dot(wh, wo) * wh - wo);
+	r.f = f(r.wi, wo, n);
 	return r;
 }
 
 
 float BSDF::fresnel(const vec3& wi, const vec3& wo) const
 {
-	return 0.0f;
+	vec3 wh = normalize(wi + wo);
+	float whdotwi = max(0.001f, dot(wh, wi));
+	float F = R0 + (1 - R0) * pow((1 - whdotwi), 5.0);
+	return F;
 }
 
 
 vec3 DielectricBSDF::f(const vec3& wi, const vec3& wo, const vec3& n) const
 {
-	return vec3(0);
+	float f = BSDF::fresnel(wi, wo);
+	vec3 brdf = reflective_material->f(wi, wo, n);
+	vec3 btdf = transmissive_material->f(wi, wo, n);
+	vec3 bsdf = f * brdf + (1 - f) * btdf;
+	return bsdf;
 }
 
 WiSample DielectricBSDF::sample_wi(const vec3& wo, const vec3& n) const
 {
 	WiSample r;
-
-	r = sampleHemisphereCosine(wo, n);
-	r.f = f(r.wi, wo, n);
+	if (randf() < 0.5) {
+		//Sample the BRDF
+		r = reflective_material->sample_wi(wo, n);
+		r.pdf *= 0.5;
+		float F = BSDF::fresnel(r.wi, wo);
+		r.f = r.f * F;
+	}
+	else {
+		//Sample the BSDF
+		r = transmissive_material->sample_wi(wo, n);
+		r.pdf *= 0.5;
+		float F = BSDF::fresnel(r.wi, wo);
+		r.f = r.f * (1 - F);
+	}
+	//r = sampleHemisphereCosine(wo, n);
+	//r.f = f(r.wi, wo, n);
 
 	return r;
 }
 
 vec3 MetalBSDF::f(const vec3& wi, const vec3& wo, const vec3& n) const
 {
-	return vec3(0);
+	float f = BSDF::fresnel(wi, wo);
+	vec3 brdf = reflective_material->f(wi, wo, n);
+	vec3 bsdf = f * brdf * color;
+	return bsdf;
 }
 
 WiSample MetalBSDF::sample_wi(const vec3& wo, const vec3& n) const
 {
 	WiSample r;
-	r = sampleHemisphereCosine(wo, n);
-	r.f = f(r.wi, wo, n);
+	//r = sampleHemisphereCosine(wo, n);
+	//r.f = f(r.wi, wo, n);
+	r = reflective_material->sample_wi(wo,n);
+	float F = BSDF::fresnel(r.wi, n);
+	r.f = r.f * F * color;
 	return r;
 }
 
 
 vec3 BSDFLinearBlend::f(const vec3& wi, const vec3& wo, const vec3& n) const
 {
-	return vec3(0.0);
+	vec3 metal = bsdf0->f(wi, wo, n);
+	vec3 di = bsdf1->f(wi, wo, n);
+	vec3 linearmix = w * metal + (1 - w) * di;
+	return linearmix;
 }
 
 WiSample BSDFLinearBlend::sample_wi(const vec3& wo, const vec3& n) const
 {
-	return WiSample{};
+	WiSample r;
+	if (randf() < w) {
+		r = bsdf0->sample_wi(wo, n);
+		float F = BSDF::fresnel(r.wi, wo);
+	}
+	else {
+		r = bsdf1->sample_wi(wo, n);
+		float F = BSDF::fresnel(r.wi, wo);
+	}
+	return r;
 }
 
 
@@ -102,14 +167,26 @@ WiSample BSDFLinearBlend::sample_wi(const vec3& wo, const vec3& n) const
 ///////////////////////////////////////////////////////////////////////////
 vec3 GlassBTDF::f(const vec3& wi, const vec3& wo, const vec3& n) const
 {
-	if(sameHemisphere(wi, wo, n))
+	// 判断光线是否是从介质内部还是外部出发
+	bool entering = dot(wo, n) > 0.0f;
+	float etaI = entering ? 1.0f : ior;  // 入射介质的折射率
+	float etaT = entering ? ior : 1.0f;  // 出射介质的折射率
+	vec3 normal = entering ? n : -n;    // 根据方向调整法线
+
+	// 入射角的余弦值
+	float cosThetaI = std::abs(dot(normal, wo));
+	float F0 = pow((etaI - etaT) / (etaI + etaT), 2);
+
+	// 使用 Fresnel-Schlick 公式
+	float fresnel = F0 + (1.0f - F0) * pow(1.0f - cosThetaI, 5);
+
+	// 如果 wi 和 wo 在不同半球（折射光线）
+	if (!sameHemisphere(wi, wo, n))
 	{
-		return vec3(0);
+		return vec3(fresnel); // 返回反射系数
 	}
-	else
-	{
-		return vec3(1);
-	}
+	return vec3(0.0f); // 折射方向是 delta 分布，不需要散射
+	
 }
 
 WiSample GlassBTDF::sample_wi(const vec3& wo, const vec3& n) const
