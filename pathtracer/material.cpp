@@ -167,25 +167,25 @@ WiSample BSDFLinearBlend::sample_wi(const vec3& wo, const vec3& n) const
 ///////////////////////////////////////////////////////////////////////////
 vec3 GlassBTDF::f(const vec3& wi, const vec3& wo, const vec3& n) const
 {
-	// 判断光线是否是从介质内部还是外部出发
+	//Determine whether the ray is entering or exiting the medium
 	bool entering = dot(wo, n) > 0.0f;
-	float etaI = entering ? 1.0f : ior;  // 入射介质的折射率
-	float etaT = entering ? ior : 1.0f;  // 出射介质的折射率
-	vec3 normal = entering ? n : -n;    // 根据方向调整法线
+	float etaI = entering ? 1.0f : ior;  // Refractive index of the incoming medium
+	float etaT = entering ? ior : 1.0f;  // Refractive index of the outgoing medium
+	vec3 normal = entering ? n : -n;    // Adjust the normal direction based on ray direction
 
-	// 入射角的余弦值
+	// consine the angle of incidence
 	float cosThetaI = std::abs(dot(normal, wo));
 	float F0 = pow((etaI - etaT) / (etaI + etaT), 2);
 
-	// 使用 Fresnel-Schlick 公式
+	//calculate fresnel
 	float fresnel = F0 + (1.0f - F0) * pow(1.0f - cosThetaI, 5);
 
-	// 如果 wi 和 wo 在不同半球（折射光线）
+	//If wi and wo are in different hemispheres
 	if (!sameHemisphere(wi, wo, n))
 	{
-		return vec3(fresnel); // 返回反射系数
+		return vec3(fresnel); // Return the reflection coefficient
 	}
-	return vec3(0.0f); // 折射方向是 delta 分布，不需要散射
+	return vec3(0.0f); //Refrection direction is a delta distribution
 	
 }
 
